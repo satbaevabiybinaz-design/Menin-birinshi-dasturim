@@ -5,3 +5,158 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Foodle</title>
 <style>
+:root{--bg:#fffaf3;--fg:#2b2118;--tile:#e9dfd2;--border:#cdbfae;--green:#4f9d4f;--yellow:#d4a21f;--gray:#7b7068;--key:#e3d7c8;--on:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#1d1814;--fg:#f3eadf;--tile:#2d2620;--border:#4a4037;--gray:#4d453e;--key:#40372f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh}
+h1{margin:16px 0 4px;letter-spacing:2px}
+p.sub{margin:0 0 10px;font-size:14px;opacity:.75}
+#msg{height:24px;font-weight:600;margin-bottom:6px}
+#board{display:grid;grid-template-rows:repeat(6,1fr);gap:6px;margin-bottom:14px}
+.row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.tile{width:clamp(46px,14vw,60px);aspect-ratio:1;border:2px solid var(--border);background:var(--tile);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;text-transform:uppercase;border-radius:6px}
+.tile.filled{border-color:var(--gray)}
+.tile.g{background:var(--green);border-color:var(--green);color:var(--on)}
+.tile.y{background:var(--yellow);border-color:var(--yellow);color:var(--on)}
+.tile.x{background:var(--gray);border-color:var(--gray);color:var(--on)}
+#kb{display:flex;flex-direction:column;gap:6px;width:min(100%,500px);padding:0 6px}
+.kr{display:flex;justify-content:center;gap:5px}
+.k{flex:1;max-width:44px;height:52px;border:0;border-radius:6px;background:var(--key);color:var(--fg);font-weight:700;text-transform:uppercase;cursor:pointer;font-size:14px}
+.k.wide{max-width:66px;font-size:12px}
+.k.g{background:var(--green);color:var(--on)}
+.k.y{background:var(--yellow);color:var(--on)}
+.k.x{background:var(--gray);color:var(--on)}
+#again{margin-top:14px;padding:10px 20px;border:0;border-radius:8px;background:var(--green);color:var(--on);font-size:16px;font-weight:600;cursor:pointer;display:none}
+.shake{animation:sh .3s}
+@keyframes sh{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+</style>
+</head>
+<body>
+<h1>🍕 FOODLE</h1>
+<p class="sub">5 harfli taom nomini 6 urinishda toping</p>
+<div id="msg"></div>
+<div id="board"></div>
+<div id="kb"></div>
+<button id="again">Yangi o‘yin</button>
+
+<script>
+const WORDS = "apple grape lemon mango peach berry onion bread pasta pizza sushi curry salad steak bacon honey sugar olive melon cream candy cocoa toast juice wheat beans chili cumin thyme basil mocha latte gravy bagel crepe donut flour fruit lunch spice sauce syrup tacos wings nacho ramen guava prune dates cider pesto".split(" ");
+const ROWS = 6, COLS = 5;
+let secret, row, col, grid, over, keyState;
+const board = document.getElementById("board");
+const kb = document.getElementById("kb");
+const msg = document.getElementById("msg");
+const again = document.getElementById("again");
+
+function build() {
+  board.innerHTML = "";
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "row";
+    const tiles = [];
+    for (let c = 0; c < COLS; c++) {
+      const t = document.createElement("div");
+      t.className = "tile";
+      rowEl.appendChild(t);
+      tiles.push(t);
+    }
+    board.appendChild(rowEl);
+    grid.push({ el: rowEl, tiles });
+  }
+  kb.innerHTML = "";
+  ["qwertyuiop", "asdfghjkl", "+zxcvbnm-"].forEach(line => {
+    const r = document.createElement("div");
+    r.className = "kr";
+    [...line].forEach(ch => {
+      const b = document.createElement("button");
+      b.className = "k";
+      if (ch === "+") { b.textContent = "Enter"; b.classList.add("wide"); b.dataset.k = "Enter"; }
+      else if (ch === "-") { b.textContent = "⌫"; b.classList.add("wide"); b.dataset.k = "Backspace"; }
+      else { b.textContent = ch; b.dataset.k = ch; }
+      b.onclick = () => press(b.dataset.k);
+      r.appendChild(b);
+    });
+    kb.appendChild(r);
+  });
+}
+
+function start() {
+  secret = WORDS[Math.floor(Math.random() * WORDS.length)];
+  row = 0; col = 0; over = false; keyState = {};
+  msg.textContent = "";
+  again.style.display = "none";
+  build();
+}
+
+function press(k) {
+  if (over) return;
+  if (k === "Enter") return submit();
+  if (k === "Backspace") {
+    if (col > 0) {
+      col--;
+      const t = grid[row].tiles[col];
+      t.textContent = "";
+      t.classList.remove("filled");
+    }
+    return;
+  }
+  if (/^[a-z]$/i.test(k) && col < COLS) {
+    const t = grid[row].tiles[col];
+    t.textContent = k.toLowerCase();
+    t.classList.add("filled");
+    col++;
+  }
+}
+
+function submit() {
+  if (col < COLS) {
+    grid[row].el.classList.add("shake");
+    setTimeout(() => grid[row].el.classList.remove("shake"), 300);
+    msg.textContent = "Harflar yetarli emas";
+    return;
+  }
+  const guess = grid[row].tiles.map(t => t.textContent).join("");
+  const res = Array(COLS).fill("x");
+  const left = {};
+  for (let i = 0; i < COLS; i++) {
+    if (guess[i] === secret[i]) res[i] = "g";
+    else left[secret[i]] = (left[secret[i]] || 0) + 1;
+  }
+  for (let i = 0; i < COLS; i++) {
+    if (res[i] === "x" && left[guess[i]] > 0) { res[i] = "y"; left[guess[i]]--; }
+  }
+  const rank = { x: 1, y: 2, g: 3 };
+  res.forEach((s, i) => {
+    grid[row].tiles[i].classList.add(s);
+    const ch = guess[i];
+    if (!keyState[ch] || rank[s] > rank[keyState[ch]]) keyState[ch] = s;
+  });
+  document.querySelectorAll(".k").forEach(b => {
+    const s = keyState[b.dataset.k];
+    if (s) { b.classList.remove("g", "y", "x"); b.classList.add(s); }
+  });
+  msg.textContent = "";
+  if (guess === secret) {
+    msg.textContent = "🎉 Tabriklaymiz, topdingiz!";
+    over = true;
+    again.style.display = "inline-block";
+    return;
+  }
+  row++; col = 0;
+  if (row === ROWS) {
+    msg.textContent = "Yutqazdingiz. So‘z: " + secret.toUpperCase();
+    over = true;
+    again.style.display = "inline-block";
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  press(e.key);
+});
+again.onclick = start;
+start();
+</script>
+</body>
+</html>
